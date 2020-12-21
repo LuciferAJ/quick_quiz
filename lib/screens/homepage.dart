@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:hive/hive.dart';
 import 'package:quick_quiz/components/homepage_widgets/homepage_body.dart';
 import 'package:quick_quiz/database/database_model.dart';
 import 'package:quick_quiz/services/API_manager.dart';
@@ -17,23 +18,39 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  bool isLoading=true;
-  DatabaseModel databaseModel=DatabaseModel();
-  uploadAPIData(){
-    QuizAPIManager.getQuizData(QuizAPIManager.mathsCategoryURL).then((value) => databaseModel.uploadAPI('Maths',{'results':value})).whenComplete(() =>
-        QuizAPIManager.getQuizData(QuizAPIManager.computerCategoryURL).then((value) => databaseModel.uploadAPI('Computer',{'results':value})).whenComplete(() =>
-            QuizAPIManager.getQuizData(QuizAPIManager.scienceCategoryURL).then((value) => databaseModel.uploadAPI('Science',{'results':value})).whenComplete(() =>
-                QuizAPIManager.getQuizData(QuizAPIManager.sportsCategoryURL).then((value) => databaseModel.uploadAPI('Sports',{'results':value})).whenComplete((){
-                  setState(() {
-                    isLoading=false;
-                  });
-                })
-            )));
+  bool isLoading = true;
+  Box _box;
+  DatabaseModel databaseModel = DatabaseModel();
 
+  uploadAPIData() {
+    QuizAPIManager.getQuizData(QuizAPIManager.mathsCategoryURL).then((value) {
+      _box.put('Maths', value);
+      return databaseModel.uploadAPI('Maths', {'results': value});
+    }).whenComplete(() =>
+        QuizAPIManager.getQuizData(QuizAPIManager.computerCategoryURL).then(
+            (value) {
+          _box.put('Computer', value);
+          databaseModel.uploadAPI('Computer', {'results': value});
+        }).whenComplete(() =>
+            QuizAPIManager.getQuizData(QuizAPIManager.scienceCategoryURL)
+                .then((value) {
+              _box.put('Science', value);
+              databaseModel.uploadAPI('Science', {'results': value});
+            }).whenComplete(() =>
+                    QuizAPIManager.getQuizData(QuizAPIManager.sportsCategoryURL)
+                        .then((value) {
+                      _box.put('Sports', value);
+                      databaseModel.uploadAPI('Sports', {'results': value});
+                    }).whenComplete(() {
+                      setState(() {
+                        isLoading = false;
+                      });
+                    }))));
   }
+
   @override
   void initState() {
-
+    _box = Hive.box('quizData');
     uploadAPIData();
     super.initState();
   }

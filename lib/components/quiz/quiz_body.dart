@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import 'package:quick_quiz/components/custom_button.dart';
 import 'package:quick_quiz/components/custom_title.dart';
 import 'package:quick_quiz/screens/quiz/quiz_results.dart';
@@ -21,56 +22,68 @@ class _QuizBodyState extends State<QuizBody> {
   final PageController _pageController = PageController(
     initialPage: 0,
   );
+  Box _box;
   List answers = [];
   List questions = [];
-  List correctAnswerIndex=[];
+  List correctAnswerIndex = [];
+  List attemptedAnswerIndex;
   List attemptedAnswer;
-  Map<dynamic, dynamic> quizData = {};
+  int score = 0;
+  Map<String, dynamic> quizData = {};
+
   setQuizData() {
-    FirebaseDatabase.instance
-        .reference()
-        .child(FirebaseAuth.instance.currentUser.uid.toString() +
-            '/subjects/' +
-            widget.subjectName)
-        .once()
-        .then((value) {
-      setState(() {
-        quizData = value.value;
-      });
-    }).whenComplete(() {
-      for (var i in quizData['results']['results']) {
-        Random random = Random();
-        int randomIndex = random.nextInt(4);
-        correctAnswerIndex.add(randomIndex);
-        var answer = [];
-        for (var j in i['incorrect_answers']) {
-          answer.add(j);
-        }
-        answer.insert(randomIndex, i['correct_answer']);
-        questions.add(i['question']);
-        answers.add(answer);
+    setState(() {
+      quizData = _box.get(widget.subjectName);
+    });
+    for (var i in quizData['results']) {
+      Random random = Random();
+      int randomIndex = random.nextInt(4);
+      correctAnswerIndex.add(randomIndex);
+      var answer = [];
+      for (var j in i['incorrect_answers']) {
+        answer.add(j);
       }
-      attemptedAnswer=List.filled(questions.length, null);
-      setState(() {
-        isLoading = false;
-      });
+      answer.insert(randomIndex, i['correct_answer']);
+      questions.add(i['question']);
+      answers.add(answer);
+    }
+    attemptedAnswerIndex = List.filled(questions.length, null);
+    attemptedAnswer = List.filled(questions.length, 'NA');
+    setState(() {
+      isLoading = false;
     });
   }
-submitAnswer(int pageIndex,int answerIndex){
-    setState(() {
-      attemptedAnswer[pageIndex]=answerIndex;
 
+  submitAnswer(int pageIndex,int answerIndex){
+    setState(() {
+      attemptedAnswerIndex[pageIndex] = answerIndex;
+      if (attemptedAnswerIndex[pageIndex] == correctAnswerIndex[pageIndex]) {
+        score++;
+      }
+      attemptedAnswer[pageIndex] = answers[pageIndex][answerIndex];
     });
 }
 
-submitNavigation(){
-   return Navigator.pushReplacement(context,
-      MaterialPageRoute(builder: (BuildContext context)=> QuizResults())
-    );
+submitNavigation() {
+  _box.put(widget.subjectName + 'score', score);
+  _box.put(widget.subjectName + 'attemptedAnswers', attemptedAnswer);
+  print(_box.get(widget.subjectName + 'attemptedAnswers'));
+  FirebaseDatabase.instance.reference().child(
+      FirebaseAuth.instance.currentUser.uid.toString() +
+          '/subjects/' +
+          widget.subjectName + '/quizResults').update({
+    'score': score,
+    'attemptedAnswers': _box.get(widget.subjectName + 'attemptedAnswers')
+  });
+  return Navigator.pushReplacement(context,
+      MaterialPageRoute(builder: (BuildContext context) =>
+          QuizResults(subjectName: widget.subjectName,))
+  );
 }
   
   @override
   void initState() {
+    _box = Hive.box('quizData');
     setQuizData();
     super.initState();
   }
@@ -93,7 +106,7 @@ submitNavigation(){
               physics: NeverScrollableScrollPhysics(),
                 controller: _pageController,
                 itemCount: quizData != null
-                    ? quizData['results']['results'].length
+                    ? quizData['results'].length
                     : 0,
                 itemBuilder: (context, pageIndex) => Padding(
                       padding: symHorizontalpx(30.0),
@@ -112,7 +125,7 @@ submitNavigation(){
                           verticalSpace(screenHeight(context) * 0.05),
                           customTitle(
                               context,
-                              quizData['results']['results'][pageIndex]['question']
+                              quizData['results'][pageIndex]['question']
                                   .toString()),
                           verticalSpace(screenHeight(context) * 0.03),
                           ListView.builder(
@@ -122,24 +135,39 @@ submitNavigation(){
                             itemCount: answers[pageIndex].length,
                             itemBuilder: (context, tileIndex) => Container(
                               decoration: BoxDecoration(
-                                  color: attemptedAnswer[pageIndex]==null?secondaryColor:
-                                  attemptedAnswer[pageIndex]==tileIndex?(attemptedAnswer[pageIndex]==correctAnswerIndex[pageIndex]?Colors.green:Colors.red)
-                                      :(correctAnswerIndex[pageIndex]==tileIndex?Colors.green:secondaryColor),
+                                  color: attemptedAnswerIndex[pageIndex] == null
+                                      ? secondaryColor
+                                      :
+                                  attemptedAnswerIndex[pageIndex] == tileIndex
+                                      ? (attemptedAnswerIndex[pageIndex] ==
+                                      correctAnswerIndex[pageIndex] ? Colors
+                                      .green : Colors.red)
+                                      : (correctAnswerIndex[pageIndex] ==
+                                      tileIndex
+                                      ? Colors.green
+                                      : secondaryColor),
                                   borderRadius: BorderRadius.circular(10)),
                               margin: symVerticalpx(6.0),
                               child: ListTile(
-                                  onTap: attemptedAnswer[pageIndex]==null? () {
+                                  onTap: attemptedAnswerIndex[pageIndex] == null
+                                      ? () {
                                     submitAnswer(pageIndex, tileIndex);
-                                  }:null,
+                                  }
+                                      : null,
                                   title: Center(
                                     child: Text(
                                       (answers[pageIndex][tileIndex]).toString(),
                                       style: quizTheme(context).subtitle1.apply(
                                           fontWeightDelta: 2,
                                           fontSizeFactor: 1.2,
-                                          color: attemptedAnswer[pageIndex]==null?primaryColor:
-                                          (attemptedAnswer[pageIndex]==tileIndex?Colors.white
-                                              :(correctAnswerIndex[pageIndex]==tileIndex?Colors.white:primaryColor))),
+                                          color: attemptedAnswerIndex[pageIndex] ==
+                                              null ? primaryColor :
+                                          (attemptedAnswerIndex[pageIndex] ==
+                                              tileIndex ? Colors.white
+                                              : (correctAnswerIndex[pageIndex] ==
+                                              tileIndex
+                                              ? Colors.white
+                                              : primaryColor))),
                                       textAlign: TextAlign.center,
                                     ),
                                   )),

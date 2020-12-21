@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hive/hive.dart';
 import 'package:lottie/lottie.dart';
 import 'package:quick_quiz/components/custom_button.dart';
 import 'package:quick_quiz/components/custom_title.dart';
@@ -7,14 +8,19 @@ import 'package:quick_quiz/shared/ui_helpers.dart';
 
 
 class QuizResults extends StatelessWidget {
+  final subjectName;
 
+  QuizResults({this.subjectName});
+
+  final Box _box = Hive.box('quizData');
 
   @override
   Widget build(BuildContext context) {
-    Future<bool> backToHome()async{
-      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(
-          builder: (context)=>HomePage()
-      ), (route) => false);
+    Future<bool> backToHome() async {
+      Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => HomePage()),
+          (route) => false);
       return false;
     }
 
@@ -32,11 +38,15 @@ class QuizResults extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Lottie.asset('assets/animations/done.json'),
+              customTitle(context,
+                  'Score: ' + _box.get(subjectName + 'score').toString() + '/' +
+                      (_box.get(subjectName + 'attemptedAnswers')).length
+                          .toString()),
               customTitle(context, 'Quiz Completed!!'),
-              verticalSpace(screenHeight(context)*0.05),
-              customButton(context, (){
+              verticalSpace(screenHeight(context) * 0.05),
+              customButton(context, () {
                 Navigator.pushAndRemoveUntil(context, MaterialPageRoute(
-                  builder: (context)=>HomePage()
+                    builder: (context) => HomePage()
                 ), (route) => false);
               }, 'Back To Home')
             ],
